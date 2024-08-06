@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Multicards</title>
+</head>
+<style>
+    {% block style %}{% endblock style %}
+    header{
+        position: fixed;
+        height: 10vh;
+        width: 100%;
+        top: 0;
+        display: flex;
+        flex-direction: column;
+    }
+</style>
+<body>
+<header>
+    <h1>Multicards</h1>
+</header>
+{% block content %}{% endblock content %}
+</body>
+</html>
