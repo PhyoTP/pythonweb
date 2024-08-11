@@ -16,10 +16,12 @@ def get_db_connection():
 def create_table():
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute('''CREATE TABLE IF NOT EXISTS sets(
+    cur.execute('''CREATE TABLE IF NOT EXISTS setstable(
         setID INTEGER PRIMARY KEY,
         name TEXT,
-        cards TEXT)''')
+        cards TEXT,
+        creator VARCHAR(100)
+    )''')
     conn.commit()
     conn.close()
 
@@ -29,12 +31,15 @@ create_table()
 def get_items():
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute('SELECT * FROM sets')
-    sets = cur.fetchall()
+    cur.execute('SELECT * FROM setstable')
+    sets_table = cur.fetchall()
     conn.close()
 
     # Convert the fetched rows to a list of dictionaries
-    sets_list = [dict(row) for row in sets]
+    sets_list = [dict(row) for row in sets_table]
+    for i in sets_list:
+        i["cards"] = json.loads(i["cards"])  # Correctly load the JSON string into a Python object
+
     return jsonify(sets_list)
 
 @bp.route('/multicards/api', methods=['POST'])
@@ -43,7 +48,7 @@ def add_item():
 
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute('INSERT INTO sets (name, cards) VALUES (?, ?)', (new_set["name"], json.dumps(new_set["cards"])))
+    cur.execute('INSERT INTO setstable (name, cards, creator) VALUES (?, ?, ?)', (new_set["name"], json.dumps(new_set["cards"]), new_set["creator"]))
     conn.commit()
     conn.close()
 
