@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, jsonify
 import sqlite3
 import json
 
-bp = Blueprint("pages", __name__, template_folder='templates')
+bp = Blueprint("multicards", __name__, template_folder='templates')
 
 @bp.route("/multicards")
 def home():
@@ -21,11 +21,6 @@ cur.execute('''CREATE TABLE IF NOT EXISTS setstable(
     name TEXT,
     cards TEXT,
     creator VARCHAR(100)
-)''')
-conn.commit()
-cur.execute('''CREATE TABLE IF NOT EXISTS userbase(
-    userID TEXT PRIMARY KEY,
-    name VARCHAR(100)
 )''')
 conn.commit()
 
@@ -53,38 +48,3 @@ def add_set():
 
     return jsonify(new_set), 201
 
-@bp.route('/api/multicards/user/<uuid>', methods=['GET'])
-def get_user(uuid):
-    cur.execute('SELECT * FROM userbase WHERE userID = ?', (uuid,))
-    user = cur.fetchone()
-    conn.close()
-    if user is None:
-        return jsonify({'error': 'User not found'}), 404
-
-    # Convert the row to a dictionary
-    user_dict = dict(user)
-
-    return jsonify(user_dict)
-@bp.route('/api/multicards/user',methods=['POST'])
-def add_user():
-    new_user = request.json
-    if not new_user:
-        return jsonify({'error': 'Invalid input'}), 400
-
-    try:
-        uuid, username = list(new_user.items())[0]
-    except ValueError:
-        return jsonify({'error': 'Invalid format'}), 400
-
-
-    # Insert the UUID and username into the users table
-    try:
-        cur.execute('INSERT INTO userbase (userID, name) VALUES (?, ?)', (uuid, username))
-        conn.commit()
-    except sqlite3.IntegrityError:
-        conn.close()
-        return jsonify({'error': 'User with this UUID already exists or username is not unique'}), 400
-
-    conn.close()
-
-    return jsonify({'message': 'User added successfully'}), 201
