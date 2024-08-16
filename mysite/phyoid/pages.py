@@ -1,6 +1,8 @@
 from flask import Blueprint, request, jsonify
 import sqlite3
-import json
+import bcrypt
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+
 
 bp = Blueprint("phyoid", __name__, template_folder='templates')
 
@@ -13,44 +15,29 @@ def get_db_connection():
 conn = get_db_connection()
 cur = conn.cursor()
 
-cur.execute('''CREATE TABLE IF NOT EXISTS users(
-    userID TEXT PRIMARY KEY,
+cur.execute('''CREATE TABLE IF NOT EXISTS userDB(
+    userID INTEGER PRIMARY KEY,
     name VARCHAR(100),
+    passw VARCHAR(60),
     sets TEXT,
     grades TEXT
 )''')
 conn.commit()
 
-@bp.route('/api/phyoid/<uuid>', methods=['GET'])
-def get_user(uuid):
-    cur.execute('SELECT * FROM users WHERE userID = ?', (uuid,))
-    user = cur.fetchone()
-    conn.commit()
-    conn.close()
-    if user is None:
-        return jsonify({'error': 'User not found'}), 404
 
-    # Convert the row to a dictionary
-    user_dict = dict(user)
-    user_dict["sets"] = json.loads(user_dict["sets"])
-    user_dict["grades"] = json.loads(user_dict["grades"])
-
-    return jsonify(user_dict)
-@bp.route('/api/phyoid',methods=['POST'])
+@bp.route('/api/phyoid/register',methods=['POST'])
 def add_user():
     new_user = request.json
     if not new_user:
         return jsonify({'error': 'Invalid input'}), 400
 
-
-    cur.execute('INSERT INTO users (userID, name, sets, grades) VALUES (?, ?, ?, ?)', (
-        new_user["userID"],
-        new_user["name"],
-        json.dumps(new_user["sets"]),
-        json.dumps(new_user["grades"])
-    ))
+    name = new_user.get("name")
+    passw = new_user.get("passw")
+    hashpass = bcrypt.hashpw(passw.encode('utf-8'), bcrypt.gensalt())
+    cur.execute('INSERT INTO users (name, passw, sets, grades) VALUES (?, ?, ?, ?)', (name,hashpass,'[]','[]'))
     conn.commit()
 
     conn.close()
 
-    return jsonify({'message': 'User added successfully'}), 201
+    access_token = create_access_token(identity=name)
+    return jsonify(access_token=access_token), 201
