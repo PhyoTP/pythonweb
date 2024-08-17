@@ -26,17 +26,37 @@ conn.close()
 
 @bp.route('/api/phyoid/register', methods=['POST'])
 def add_user():
-    new_user = request.json
-    if not new_user:
-        return jsonify({'error': 'Invalid input'}), 400
     conn = get_db_connection()
     cur = conn.cursor()
+
+    new_user = request.json
+    if not new_user:
+        conn.close()
+        return jsonify({'error': 'Invalid input'}), 400
+
     username = new_user.get("username")
     password = new_user.get("password")
+
+    if not username or not password:
+        conn.close()
+        return jsonify({'error': 'Missing username or password'}), 400
+
+    # Check if the username already exists
+    cur.execute('SELECT username FROM userDB WHERE username = ?', (username,))
+    existing_user = cur.fetchone()
+
+    if existing_user:
+        conn.commit()
+        conn.close()
+        return jsonify({'error': 'Username already exists'}), 409
+
+    # Proceed with user registration
     hashpass = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-    cur.execute('INSERT INTO userDB (username, hashpass, sets, subjects) VALUES (?, ?, ?, ?)', (username,hashpass,'[]','[]'))
+    cur.execute('INSERT INTO userDB (username, hashpass, sets, subjects) VALUES (?, ?, ?, ?)',
+                (username, hashpass, '[]', '[]'))
     conn.commit()
     conn.close()
+
     access_token = create_access_token(identity=username)
     return jsonify(access_token=access_token), 201
 
@@ -78,3 +98,28 @@ def update_user(data):
     conn.close()
 
     return jsonify({"msg": "User data updated successfully"}), 200
+@bp.route('/api/phyoid/userdata', methods=['GET'])
+@jwt_required()
+def get_user():
+    current_user = get_jwt_identity()  # Get the username from the JWT token
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # Fetch the user data based on the username
+    cur.execute('SELECT * FROM userDB WHERE username = ?', (current_user,))
+    user_data = cur.fetchone()
+
+    conn.commit()
+    conn.close()
+
+    if not user_data:
+        return jsonify({'error': 'User not found'}), 404
+
+    # Convert the user_data to a dictionary and return it
+    user_info = {
+        "username": user_data["username"],
+        "sets": user_data["sets"],
+        "subjects": user_data["subjects"]
+    }
+
+    return jsonify(user_info), 200
