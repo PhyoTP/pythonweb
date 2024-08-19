@@ -13,12 +13,21 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row  # To return rows as dictionaries
     return conn
 
-
+conn = get_db_connection()
+cur = conn.cursor()
+cur.execute('''CREATE TABLE IF NOT EXISTS setDB(
+    setID VARCHAR(36) PRIMARY KEY,
+    name TEXT,
+    cards TEXT,
+    creator VARCHAR(100)
+)''')
+conn.commit()
+conn.close()
 @bp.route('/api/multicards/sets', methods=['GET'])
 def get_sets():
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute('SELECT * FROM setstable')
+    cur.execute('SELECT * FROM setDB')
     sets_table = cur.fetchall()
     conn.commit()
     conn.close()
@@ -36,7 +45,7 @@ def add_set():
     cur = conn.cursor()
     new_set = request.json
 
-    cur.execute('INSERT INTO setstable (name, cards, creator) VALUES (?, ?, ?)', (new_set["name"], json.dumps(new_set["cards"]), new_set["creator"]))
+    cur.execute('INSERT INTO setDB (name, cards, creator) VALUES (?, ?, ?)', (new_set["name"], json.dumps(new_set["cards"]), new_set["creator"]))
     conn.commit()
     conn.close()
 

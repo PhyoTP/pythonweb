@@ -76,7 +76,7 @@ def check_user():
     conn.close()
     if not user_data:
         return jsonify({'error': 'User not found'}), 404
-    if bcrypt.checkpw(password.encode('utf-8'), user_data.get("hashpass")):
+    if bcrypt.checkpw(password.encode('utf-8'), user_data["hashpass"]):
         access_token = create_access_token(identity=username)
         return jsonify(access_token=access_token), 200
     else:
