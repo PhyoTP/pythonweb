@@ -93,7 +93,7 @@ def update_user(data):
     current_user = get_jwt_identity()
     new = request.json
     new_data = new.get(data)
-    cur.execute(f'UPDATE userDB SET {data} = ? WHERE username = ?', (new_data, current_user))
+    cur.execute(f'UPDATE userDB SET {data} = ? WHERE username = ?', (json.dumps(new_data), current_user))
     conn.commit()
     conn.close()
 
@@ -118,8 +118,8 @@ def get_user():
     # Convert the user_data to a dictionary and return it
     user_info = {
         "username": user_data["username"],
-        "sets": user_data["sets"],
-        "subjects": user_data["subjects"]
+        "sets": json.loads(user_data["sets"]),
+        "subjects": json.loads(user_data["subjects"])
     }
 
     return jsonify(user_info), 200
