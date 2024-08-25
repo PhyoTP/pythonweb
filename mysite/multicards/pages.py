@@ -16,20 +16,22 @@ def get_db_connection():
 
 conn = get_db_connection()
 cur = conn.cursor()
-cur.execute('''CREATE TABLE IF NOT EXISTS setdb(
-    setID VARCHAR(36) PRIMARY KEY,
-    name TEXT,
-    cards TEXT,
-    creator VARCHAR(100)
-)''')
+# cur.execute('''CREATE TABLE IF NOT EXISTS setable(
+#     setID VARCHAR(36) PRIMARY KEY not null,
+#     name TEXT,
+#     cards TEXT,
+#     creator VARCHAR(100)
+# )''')
 # cur.execute('update setsdb set setID = "6cc7e8fe-2438-4f22-99f1-03ad6d64c5bb" where name = "Acid/base reactions"')
+cur.execute('''ALTER TABLE setable
+RENAME COLUMN setID to id''')
 conn.commit()
 conn.close()
 @bp.route('/api/multicards/sets', methods=['GET'])
 def get_sets():
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute('SELECT * FROM setdb')
+    cur.execute('SELECT * FROM setable')
     sets_table = cur.fetchall()
     conn.commit()
     conn.close()
@@ -47,7 +49,7 @@ def add_set():
     cur = conn.cursor()
     new_set = request.json
 
-    cur.execute('INSERT INTO setdb (name, cards, creator) VALUES (?, ?, ?)', (new_set["name"], json.dumps(new_set["cards"]), new_set["creator"]))
+    cur.execute('INSERT INTO setable (name, cards, creator) VALUES (?, ?, ?)', (new_set["name"], json.dumps(new_set["cards"]), new_set["creator"]))
     conn.commit()
     conn.close()
 
@@ -60,12 +62,12 @@ def update_set(setID):
     cur = conn.cursor()
     updated_set = request.json
 
-    cur.execute('SELECT * FROM setdb WHERE setID = ?', (setID,))
+    cur.execute('SELECT * FROM setable WHERE id = ?', (setID,))
     old_set = cur.fetchone()
     conn.commit()
     if old_set:
         if old_set['creator'] == current_user:
-            cur.execute('UPDATE setdb SET name = ?, cards = ? WHERE setID = ?', (updated_set['name'], json.dumps(updated_set['cards']), setID))
+            cur.execute('UPDATE setable SET name = ?, cards = ? WHERE setID = ?', (updated_set['name'], json.dumps(updated_set['cards']), setID))
             conn.close()
             return jsonify({'msg': 'Updated Successfully'}), 200
         else:
@@ -81,12 +83,12 @@ def delete_set(setID):
     conn = get_db_connection()
     cur = conn.cursor()
 
-    cur.execute('SELECT * FROM setdb WHERE setID = ?', (setID,))
+    cur.execute('SELECT * FROM set WHERE id = ?', (setID,))
     old_set = cur.fetchone()
     conn.commit()
     if old_set:
         if old_set['creator'] == current_user:
-            cur.execute('DELETE FROM setdb WHERE setID = ?', (setID,))
+            cur.execute('DELETE FROM setable WHERE setID = ?', (setID,))
             conn.close()
             return '', 204
         else:

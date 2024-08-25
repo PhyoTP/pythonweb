@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 import sqlite3
 import bcrypt
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+import json
 
 
 bp = Blueprint("phyoid", __name__, template_folder='templates')
@@ -84,7 +85,7 @@ def check_user():
 @bp.route('/api/phyoid/update/<data>', methods=['PATCH'])
 @jwt_required()
 def update_user(data):
-    allowed_data = {'username', 'sets', 'subjects'}
+    allowed_data = {'sets', 'subjects'}
 
     if data not in allowed_data:
         return jsonify({'error': 'Invalid column'}), 400
