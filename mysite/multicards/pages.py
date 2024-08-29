@@ -13,12 +13,12 @@ def get_db_connection():
     conn = sqlite3.connect("multicards.db")
     conn.row_factory = sqlite3.Row  # To return rows as dictionaries
     return conn
-conn = get_db_connection()
-cur = conn.cursor()
-cur.execute('''ALTER TABLE setable
-ADD COLUMN isPublic INTEGER''')
-conn.commit()
-conn.close()
+# conn = get_db_connection()
+# cur = conn.cursor()
+# cur.execute('''ALTER TABLE setable
+# ADD COLUMN isPublic INTEGER''')
+# conn.commit()
+# conn.close()
 @bp.route('/api/multicards/sets', methods=['GET'])
 def get_sets():
     conn = get_db_connection()
@@ -76,7 +76,7 @@ def delete_set(setID):
     conn = get_db_connection()
     cur = conn.cursor()
 
-    cur.execute('SELECT * FROM set WHERE id = ?', (setID,))
+    cur.execute('SELECT * FROM setable WHERE id = ?', (setID,))
     old_set = cur.fetchone()
     conn.commit()
     if old_set:

@@ -94,6 +94,9 @@ def update_user(data):
     current_user = get_jwt_identity()
     new = request.json
     new_data = new.get(data)
+    if new_data is None:
+        conn.close()
+        return jsonify({'error': 'Invalid input'}), 400
     cur.execute(f'UPDATE userDB SET {data} = ? WHERE username = ?', (json.dumps(new_data), current_user))
     conn.commit()
     conn.close()
@@ -101,7 +104,7 @@ def update_user(data):
     return jsonify({"msg": "User data updated successfully"}), 200
 @bp.route('/api/phyoid/userdata', methods=['GET'])
 @jwt_required()
-def get_user():
+def get_all_user_data():
     current_user = get_jwt_identity()  # Get the username from the JWT token
     conn = get_db_connection()
     cur = conn.cursor()
@@ -124,3 +127,28 @@ def get_user():
     }
 
     return jsonify(user_info), 200
+@bp.route('/api/phyoid/userdata/<data>', methods=['GET'])
+@jwt_required()
+def get_user(data):
+    allowed_data = {'sets', 'subjects'}
+
+    if data not in allowed_data:
+        return jsonify({'error': 'Invalid column'}), 400
+
+    current_user = get_jwt_identity()  # Get the username from the JWT token
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # Securely build the SQL query using parameterized queries
+    query = f'SELECT {data} FROM userDB WHERE username = ?'
+    cur.execute(query, (current_user,))
+
+    user_data = cur.fetchone()
+
+    conn.commit()
+    conn.close()
+
+    if not user_data:
+        return jsonify({'error': 'User not found'}), 404
+
+    return jsonify(json.loads(user_data[0])), 200
