@@ -22,19 +22,35 @@ def get_db_connection():
 @bp.route('/api/multicards/sets', methods=['GET'])
 def get_sets():
     conn = get_db_connection()
+    conn.row_factory = sqlite3.Row  # Make rows dictionary-like
     cur = conn.cursor()
-    cur.execute('SELECT * FROM setable')
+    cur.execute('SELECT id, name, creator FROM setable')
     sets_table = cur.fetchall()
-    conn.commit()
     conn.close()
 
     # Convert the fetched rows to a list of dictionaries
     sets_list = [dict(row) for row in sets_table]
-    for i in sets_list:
-        i["cards"] = json.loads(i["cards"])  # Correctly load the JSON string into a Python object
-        i["isPublic"] = bool(i["isPublic"])
 
     return jsonify(sets_list), 200
+
+@bp.route('/api/multicards/set/<uuid>', methods=['GET'])
+def get_set(uuid):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM setable WHERE id = ?', (uuid,))
+    fetched_set = cur.fetchone()
+    conn.close()
+
+    if fetched_set is None:
+        return jsonify({'error': 'Set not found'}), 404
+
+    # Convert the fetched row to a dictionary
+    fetched_dict = dict(fetched_set)
+    fetched_dict["cards"] = json.loads(fetched_dict["cards"])  # Correctly load the JSON string into a Python object
+    fetched_dict["isPublic"] = bool(fetched_dict["isPublic"])
+
+    return jsonify(fetched_dict), 200
+
 
 @bp.route('/api/multicards/sets', methods=['POST'])
 def add_set():
@@ -61,6 +77,7 @@ def update_set(setID):
     if old_set:
         if old_set['creator'] == current_user:
             cur.execute('UPDATE setable SET name = ?, cards = ? WHERE id = ?', (updated_set['name'], json.dumps(updated_set['cards']), setID))
+            conn.commit()
             conn.close()
             return jsonify({'msg': 'Updated Successfully'}), 200
         else:
@@ -81,7 +98,8 @@ def delete_set(setID):
     conn.commit()
     if old_set:
         if old_set['creator'] == current_user:
-            cur.execute('DELETE FROM setable WHERE setID = ?', (setID,))
+            cur.execute('DELETE FROM setable WHERE id = ?', (setID,))
+            conn.commit()
             conn.close()
             return '', 204
         else:

@@ -152,3 +152,9 @@ def get_user(data):
         return jsonify({'error': 'User not found'}), 404
 
     return jsonify(json.loads(user_data[0])), 200
+@bp.route('/api/phyoid/refresh', methods=['POST'])
+@jwt_required(refresh=True)
+def refresh():
+    identity = get_jwt_identity()
+    access_token = create_access_token(identity=identity)
+    return jsonify(access_token=access_token)
