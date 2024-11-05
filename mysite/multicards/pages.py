@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify
-import sqlite3
 import json
 from flask_jwt_extended import get_jwt_identity, jwt_required
+from models import db, Setable
 
 bp = Blueprint("multicards", __name__, template_folder='templates')
 
@@ -9,102 +9,74 @@ bp = Blueprint("multicards", __name__, template_folder='templates')
 def home():
     return render_template("pages/home.html")
 
-def get_db_connection():
-    conn = sqlite3.connect("multicards.db")
-    conn.row_factory = sqlite3.Row  # To return rows as dictionaries
-    return conn
-# conn = get_db_connection()
-# cur = conn.cursor()
-# cur.execute('''ALTER TABLE setable
-# ADD COLUMN isPublic INTEGER''')
-# conn.commit()
-# conn.close()
-@bp.route('/api/multicards/sets', methods=['GET'])
+@bp.route('/multicards/sets', methods=['GET'])
 def get_sets():
-    conn = get_db_connection()
-    conn.row_factory = sqlite3.Row  # Make rows dictionary-like
-    cur = conn.cursor()
-    cur.execute('SELECT id, name, creator FROM setable')
-    sets_table = cur.fetchall()
-    conn.close()
-
-    # Convert the fetched rows to a list of dictionaries
-    sets_list = [dict(row) for row in sets_table]
-
+    sets_table = Setable.query.with_entities(Setable.id, Setable.name, Setable.creator).all()
+    sets_list = [{"id": s.id, "name": s.name, "creator": s.creator} for s in sets_table]
     return jsonify(sets_list), 200
 
-@bp.route('/api/multicards/set/<uuid>', methods=['GET'])
+@bp.route('/multicards/set/<uuid>', methods=['GET'])
 def get_set(uuid):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute('SELECT * FROM setable WHERE id = ?', (uuid,))
-    fetched_set = cur.fetchone()
-    conn.close()
+    fetched_set = Setable.query.get(uuid)
 
     if fetched_set is None:
         return jsonify({'error': 'Set not found'}), 404
 
-    # Convert the fetched row to a dictionary
-    fetched_dict = dict(fetched_set)
-    fetched_dict["cards"] = json.loads(fetched_dict["cards"])  # Correctly load the JSON string into a Python object
-    fetched_dict["isPublic"] = bool(fetched_dict["isPublic"])
+    fetched_dict = {
+        "id": fetched_set.id,
+        "name": fetched_set.name,
+        "creator": fetched_set.creator,
+        "cards": fetched_set.cards,
+        "isPublic": fetched_set.ispublic
+    }
 
     return jsonify(fetched_dict), 200
 
-
-@bp.route('/api/multicards/sets', methods=['POST'])
+@bp.route('/multicards/sets', methods=['POST'])
 def add_set():
-    conn = get_db_connection()
-    cur = conn.cursor()
     new_set = request.json
-
-    cur.execute('INSERT INTO setable (id, name, cards, creator, isPublic) VALUES (?, ?, ?, ?, ?)', (new_set["id"], new_set["name"], json.dumps(new_set["cards"]), new_set["creator"], new_set["isPublic"]))
-    conn.commit()
-    conn.close()
+    set_entry = Setable(
+        id=new_set["id"],
+        name=new_set["name"],
+        cards=json.dumps(new_set["cards"]),
+        creator=new_set["creator"],
+        ispublic=new_set["isPublic"]
+    )
+    db.session.add(set_entry)
+    db.session.commit()
 
     return jsonify(new_set), 201
-@bp.route('/api/multicards/sets/update/<setID>',methods=['PUT'])
+
+@bp.route('/multicards/sets/update/<setID>', methods=['PUT'])
 @jwt_required()
 def update_set(setID):
     current_user = get_jwt_identity()
-    conn = get_db_connection()
-    cur = conn.cursor()
     updated_set = request.json
+    existing_set = Setable.query.get(setID)
 
-    cur.execute('SELECT * FROM setable WHERE id = ?', (setID,))
-    old_set = cur.fetchone()
-    conn.commit()
-    if old_set:
-        if old_set['creator'] == current_user:
-            cur.execute('UPDATE setable SET name = ?, cards = ? WHERE id = ?', (updated_set['name'], json.dumps(updated_set['cards']), setID))
-            conn.commit()
-            conn.close()
+    if existing_set:
+        if existing_set.creator == current_user:
+            existing_set.name = updated_set['name']
+            existing_set.cards = json.dumps(updated_set['cards'])
+            db.session.commit()
             return jsonify({'msg': 'Updated Successfully'}), 200
         else:
-            conn.close()
-            return jsonify({'msg':'Forbidden'}), 403
+            return jsonify({'msg': 'Forbidden'}), 403
     else:
-        conn.close()
-        return jsonify({'msg':'Not Found'}), 404
-@bp.route('/api/multicards/sets/delete/<setID>',methods=['DELETE'])
+        return jsonify({'msg': 'Not Found'}), 404
+
+@bp.route('/multicards/sets/delete/<setID>', methods=['DELETE'])
 @jwt_required()
 def delete_set(setID):
     current_user = get_jwt_identity()
-    conn = get_db_connection()
-    cur = conn.cursor()
+    existing_set = Setable.query.get(setID)
 
-    cur.execute('SELECT * FROM setable WHERE id = ?', (setID,))
-    old_set = cur.fetchone()
-    conn.commit()
-    if old_set:
-        if old_set['creator'] == current_user:
-            cur.execute('DELETE FROM setable WHERE id = ?', (setID,))
-            conn.commit()
-            conn.close()
+    if existing_set:
+        if existing_set.creator == current_user:
+            db.session.delete(existing_set)
+            db.session.commit()
             return '', 204
         else:
-            conn.close()
-            return jsonify({'msg':'Forbidden'}), 403
+            return jsonify({'msg': 'Forbidden'}), 403
     else:
-        conn.close()
-        return jsonify({'msg':'Not Found'}), 404
+        return jsonify({'msg': 'Not Found'}), 404

@@ -1,158 +1,134 @@
 from flask import Blueprint, request, jsonify
-import sqlite3
 import bcrypt
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 import json
-
+from models import db, UserDB
+import requests
 
 bp = Blueprint("phyoid", __name__, template_folder='templates')
 
-def get_db_connection():
-    conn = sqlite3.connect("phyoid.db")
-    conn.row_factory = sqlite3.Row  # To return rows as dictionaries
-    return conn
-
-
-conn = get_db_connection()
-cur = conn.cursor()
-cur.execute('''CREATE TABLE IF NOT EXISTS userDB(
-    userID INTEGER PRIMARY KEY,
-    username VARCHAR(100),
-    hashpass VARCHAR(60),
-    sets TEXT,
-    subjects TEXT
-)''')
-conn.commit()
-conn.close()
-
-@bp.route('/api/phyoid/register', methods=['POST'])
+@bp.route('/phyoid/register', methods=['POST'])
 def add_user():
-    conn = get_db_connection()
-    cur = conn.cursor()
-
     new_user = request.json
     if not new_user:
-        conn.close()
         return jsonify({'error': 'Invalid input'}), 400
 
     username = new_user.get("username")
     password = new_user.get("password")
 
     if not username or not password:
-        conn.close()
         return jsonify({'error': 'Missing username or password'}), 400
 
     # Check if the username already exists
-    cur.execute('SELECT username FROM userDB WHERE username = ?', (username,))
-    existing_user = cur.fetchone()
-
-    if existing_user:
-        conn.commit()
-        conn.close()
+    if UserDB.query.filter_by(username=username).first():
         return jsonify({'error': 'Username already exists'}), 409
 
     # Proceed with user registration
-    hashpass = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-    cur.execute('INSERT INTO userDB (username, hashpass, sets, subjects) VALUES (?, ?, ?, ?)',
-                (username, hashpass, '[]', '[]'))
-    conn.commit()
-    conn.close()
+    try:
+        hashpass = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        new_user = UserDB(username=username, hashpass=hashpass, sets=json.dumps([]), subjects=json.dumps([]))
+        db.session.add(new_user)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Database error', 'message': str(e)}), 500
 
     access_token = create_access_token(identity=username)
     return jsonify(access_token=access_token), 201
 
-@bp.route('/api/phyoid/login', methods=['POST'])
+
+@bp.route('/phyoid/login', methods=['POST'])
 def check_user():
     user = request.json
     if not user:
         return jsonify({'error': 'Invalid input'}), 400
-    conn = get_db_connection()
-    cur = conn.cursor()
+
     username = user.get("username")
     password = user.get("password")
 
-    cur.execute('SELECT * FROM userDB WHERE username = ?', (username,))
-    user_data = cur.fetchone()
-    conn.commit()
-    conn.close()
+    user_data = UserDB.query.filter_by(username=username).first()
     if not user_data:
         return jsonify({'error': 'User not found'}), 404
-    if bcrypt.checkpw(password.encode('utf-8'), user_data["hashpass"]):
-        access_token = create_access_token(identity=username)
-        return jsonify(access_token=access_token), 200
-    else:
-        return jsonify({"msg": "Bad credentials"}), 401
-@bp.route('/api/phyoid/update/<data>', methods=['PATCH'])
+
+    try:
+        # Attempt to verify the password
+        if bcrypt.checkpw(password.encode('utf-8'), user_data.hashpass.encode('utf-8')):
+            access_token = create_access_token(identity=username)
+            return jsonify(access_token=access_token), 200
+        else:
+            return jsonify({"msg": "Bad credentials"}), 401
+    except ValueError as e:
+        # Handle cases where salt is invalid, likely due to old format
+        if "Invalid salt" in str(e):
+            response = requests.post('https://phyotp.pythonanywhere.com/api/phyoid/login', json=user)
+            return response.json(), response.status_code
+        else:
+            # Reraise if it's an unexpected error
+            raise
+
+
+@bp.route('/phyoid/update/<data>', methods=['PATCH'])
 @jwt_required()
 def update_user(data):
     allowed_data = {'sets', 'subjects'}
-
     if data not in allowed_data:
         return jsonify({'error': 'Invalid column'}), 400
-    conn = get_db_connection()
-    cur = conn.cursor()
+
     current_user = get_jwt_identity()
-    new = request.json
-    new_data = new.get(data)
+    new_data = request.json.get(data)
     if new_data is None:
-        conn.close()
         return jsonify({'error': 'Invalid input'}), 400
-    cur.execute(f'UPDATE userDB SET {data} = ? WHERE username = ?', (json.dumps(new_data), current_user))
-    conn.commit()
-    conn.close()
+
+    user = UserDB.query.filter_by(username=current_user).first()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    setattr(user, data, json.dumps(new_data))
+    db.session.commit()
 
     return jsonify({"msg": "User data updated successfully"}), 200
-@bp.route('/api/phyoid/userdata', methods=['GET'])
+
+@bp.route('/phyoid/userdata', methods=['GET'])
 @jwt_required()
 def get_all_user_data():
-    current_user = get_jwt_identity()  # Get the username from the JWT token
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    # Fetch the user data based on the username
-    cur.execute('SELECT * FROM userDB WHERE username = ?', (current_user,))
-    user_data = cur.fetchone()
-
-    conn.commit()
-    conn.close()
+    current_user = get_jwt_identity()
+    user_data = UserDB.query.filter_by(username=current_user).first()
 
     if not user_data:
         return jsonify({'error': 'User not found'}), 404
 
-    # Convert the user_data to a dictionary and return it
     user_info = {
-        "username": user_data["username"],
-        "sets": json.loads(user_data["sets"]),
-        "subjects": json.loads(user_data["subjects"])
+        "username": user_data.username,
+        "sets": user_data.sets,
+        "subjects": user_data.subjects
     }
-
     return jsonify(user_info), 200
-@bp.route('/api/phyoid/userdata/<data>', methods=['GET'])
+
+@bp.route('/phyoid/userdata/<data>', methods=['GET'])
 @jwt_required()
 def get_user(data):
     allowed_data = {'sets', 'subjects'}
-
     if data not in allowed_data:
         return jsonify({'error': 'Invalid column'}), 400
 
-    current_user = get_jwt_identity()  # Get the username from the JWT token
-    conn = get_db_connection()
-    cur = conn.cursor()
+    current_user = get_jwt_identity()
+    user = UserDB.query.filter_by(username=current_user).first()
 
-    # Securely build the SQL query using parameterized queries
-    query = f'SELECT {data} FROM userDB WHERE username = ?'
-    cur.execute(query, (current_user,))
-
-    user_data = cur.fetchone()
-
-    conn.commit()
-    conn.close()
-
-    if not user_data:
+    if not user:
         return jsonify({'error': 'User not found'}), 404
 
-    return jsonify(json.loads(user_data[0])), 200
-@bp.route('/api/phyoid/refresh', methods=['POST'])
+    # Retrieve the data from the user object
+    user_data = getattr(user, data)
+    
+    # Check if user_data is already a list (decoded from JSON)
+    if isinstance(user_data, str):
+        # If it’s a JSON string, decode it to a list
+        user_data = json.loads(user_data)
+    
+    return jsonify(user_data), 200
+
+
+@bp.route('/phyoid/refresh', methods=['POST'])
 @jwt_required(refresh=True)
 def refresh():
     identity = get_jwt_identity()
