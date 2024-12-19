@@ -134,3 +134,41 @@ def refresh():
     identity = get_jwt_identity()
     access_token = create_access_token(identity=identity)
     return jsonify(access_token=access_token)
+
+@bp.route('/phyoid/delete', methods=['POST'])
+@jwt_required()
+def delete():
+    data = request.json
+    if not data or 'password' not in data:
+        return jsonify({'error': 'Invalid input, password is required'}), 400
+
+    password = data.get('password')
+    current_user = get_jwt_identity()
+    user = UserDB.query.filter_by(username=current_user).first()
+
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    try:
+        # Attempt to verify the password
+        if bcrypt.checkpw(password.encode('utf-8'), user.hashpass.encode('utf-8')):
+            db.session.delete(user)
+            db.session.commit()
+            return jsonify({"msg": "User deleted successfully"}), 200
+        else:
+            return jsonify({"msg": "Bad credentials"}), 401
+    except ValueError as e:
+        if "Invalid salt" in str(e):
+            # Attempt external deletion for legacy salt format
+            response = requests.post(
+                'https://phyotp.pythonanywhere.com/api/phyoid/delete',
+                json=data
+            )
+            if response.status_code == 200:
+                db.session.delete(user)
+                db.session.commit()
+                return jsonify({"msg": "User deleted successfully"}), 200
+            else:
+                return jsonify({'error': 'External deletion failed', 'details': response.json()}), response.status_code
+        else:
+            raise
