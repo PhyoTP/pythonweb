@@ -80,12 +80,18 @@ def delete_set(setID):
             return jsonify({'msg': 'Forbidden'}), 403
     else:
         return jsonify({'msg': 'Not Found'}), 404
-@bp.route('/multicards/user/delete', methods=['DELETE'])
+@bp.route('/multicards/user/sets_rename', methods=['PUT'])
 @jwt_required()
-def delete_user():
+def rename_user_sets():
     current_user = get_jwt_identity()
     Setable.query.filter_by(creator=current_user).update({Setable.creator: None})
     db.session.commit()
     return '', 204
 
-    
+@bp.route('/multicards/user/delete', methods=['DELETE'])
+@jwt_required()
+def delete_user():
+    current_user = get_jwt_identity()
+    Setable.query.filter_by(creator=current_user).delete()
+    db.session.commit()
+    return '', 204
