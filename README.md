@@ -8,7 +8,7 @@ base url is `api.phyotp.dev/phyoid`. If JWT token is required, it has to be in t
 Registers a new user and returns a JWT token.
 ### /login (POST)
 Logs in a user and returns a new JWT token.
-### /update/<data> (PATCH)
+### /update/`data` (PATCH)
 Updates the specified data. JWT required.
 ### /userdata (GET)
 Returns user data. Specific data can be specified by using `/userdata/<data>`. JWT required.
