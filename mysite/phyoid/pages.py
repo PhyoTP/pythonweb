@@ -5,7 +5,7 @@ import json
 from models import db, UserDB
 import requests
 
-bp = Blueprint("phyoid", __name__, template_folder='templates')
+bp = Blueprint("phyoid", __name__)
 
 @bp.route('/phyoid/register', methods=['POST'])
 def add_user():

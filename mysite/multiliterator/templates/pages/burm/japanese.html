@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block style %}
+h2 {
+    font-size: 30px;
+}
+{% endblock style %}
+
+{% block content %}
+<h2>Burm</h2>
+<h3>Japanese</h3>
+<form id="form">
+    <label for="input">Input Burmese</label>
+    <input type="text" name="input" id="input">
+    <input type="submit" value="Translate">
+</form>
+<p id="answer"></p>
+
+<script>
+    document.getElementById("form").onsubmit = function(event) {
+        event.preventDefault(); // Prevent page reload
+
+        let input = document.getElementById("input").value;
+        let url = "/multiliterator/burm/japanese";  // Corrected endpoint
+
+        fetch(url, {
+            method: "POST",
+            body: JSON.stringify({ text: input }),  // Corrected key
+            headers: {
+                "Content-Type": "application/json"
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById("answer").innerText = data.output;
+        })
+        .catch(error => console.error("Error:", error));
+    };
+</script>
+{% endblock content %}

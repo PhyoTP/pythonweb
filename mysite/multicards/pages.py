@@ -5,7 +5,7 @@ from models import db, Setable
 
 bp = Blueprint("multicards", __name__, template_folder='templates')
 
-@bp.route("/multicards")
+@bp.route("/")
 def home():
     return render_template("pages/home.html")
 

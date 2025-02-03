@@ -17,7 +17,7 @@ from selenium.webdriver.support import expected_conditions as EC
 # chrome_options.add_argument("--disable-dev-shm-usage")  # Overcome limited resource issues
 # chrome_options.add_argument("--disable-gpu")  # Disable GPU (if not needed)
 
-bp = Blueprint("stickynotes", __name__, template_folder='templates')
+bp = Blueprint("stickynotes", __name__)
 
 def get_dynamic_content(url):
     try:

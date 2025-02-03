@@ -1,8 +1,9 @@
 from flask import Flask
 from flask_jwt_extended import JWTManager
-from multicards import pages as m
-from phyoid import pages as p
-from stickynotes import pages as s
+from multicards import pages as cards
+from phyoid import pages as phyo
+from stickynotes import pages as sticky
+from multiliterator import pages as literator
 from models import db
 from flask_cors import CORS
 app = Flask(__name__)
@@ -27,13 +28,14 @@ jwt = JWTManager(app)
 CORS(app, resources={r"/*": {"origins": "*"}}, allow_headers=["Content-Type", "Authorization"], methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
 
 # Register blueprints
-app.register_blueprint(m.bp)
-app.register_blueprint(p.bp)
-app.register_blueprint(s.bp)
+app.register_blueprint(cards.bp)
+app.register_blueprint(phyo.bp)
+app.register_blueprint(sticky.bp)
+app.register_blueprint(literator.bp)
 
 if __name__ == '__main__':
     with app.app_context():
         # Create all tables for each bind
         db.create_all('phyoid')   # Create tables for the phyoid database
         db.create_all('multicards')  # Create tables for the multicards database
-    app.run(host='0.0.0.0', port=6582, debug=False)
+    app.run(host='0.0.0.0', port=40139, debug=False)
