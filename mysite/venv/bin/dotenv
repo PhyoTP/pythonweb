@@ -1,4 +1,4 @@
-#!/home/phyotp/pythonweb/mysite/venv/bin/python3
+#!/home/phyotp/pythonweb/mysite/venv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys

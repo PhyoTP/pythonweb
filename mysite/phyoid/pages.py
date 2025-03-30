@@ -26,7 +26,7 @@ def add_user():
     # Proceed with user registration
     try:
         hashpass = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-        new_user = UserDB(username=username, hashpass=hashpass, sets=json.dumps([]), subjects=json.dumps([]))
+        new_user = UserDB(username=username, hashpass=hashpass)
         db.session.add(new_user)
         db.session.commit()
     except Exception as e:
@@ -70,7 +70,7 @@ def check_user():
 @bp.route('/phyoid/update/<data>', methods=['PATCH'])
 @jwt_required()
 def update_user(data):
-    allowed_data = {'sets', 'subjects'}
+    allowed_data = {'sets', 'subjects', 'verdi'}
     if data not in allowed_data:
         return jsonify({'error': 'Invalid column'}), 400
 
@@ -100,14 +100,15 @@ def get_all_user_data():
     user_info = {
         "username": user_data.username,
         "sets": user_data.sets,
-        "subjects": user_data.subjects
+        "subjects": user_data.subjects,
+        "verdi": user_data.verdi
     }
     return jsonify(user_info), 200
 
 @bp.route('/phyoid/userdata/<data>', methods=['GET'])
 @jwt_required()
 def get_user(data):
-    allowed_data = {'sets', 'subjects'}
+    allowed_data = {'sets', 'subjects','verdi'}
     if data not in allowed_data:
         return jsonify({'error': 'Invalid column'}), 400
 
@@ -172,3 +173,28 @@ def delete():
                 return jsonify({'error': 'External deletion failed', 'details': response.json()}), response.status_code
         else:
             raise
+
+# admin
+
+@bp.route('/phyoid/admin/resetPassword', methods=['POST'])
+@jwt_required()
+def admin_reset_password():
+    admin = get_jwt_identity()
+    if admin != "PhyoTP":
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.json
+    if not data or 'username' not in data or 'password' not in data:
+        return jsonify({'error': 'Invalid input, username and password are required'}), 400
+    username = data.get('username')
+    password = data.get('password')
+    user = UserDB.query.filter_by(username=username).first()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    try:
+        hashpass = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        user.hashpass = hashpass
+        db.session.commit()
+        return jsonify({"msg": "Password reset successfully"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Database error', 'message': str(e)}), 500

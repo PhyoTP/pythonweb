@@ -38,4 +38,4 @@ if __name__ == '__main__':
         # Create all tables for each bind
         db.create_all('phyoid')   # Create tables for the phyoid database
         db.create_all('multicards')  # Create tables for the multicards database
-    app.run(host='0.0.0.0', port=40139, debug=False)
+    app.run(host='0.0.0.0', port=35103, debug=False)

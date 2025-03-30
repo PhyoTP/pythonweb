@@ -11,6 +11,7 @@ class UserDB(db.Model):
     hashpass = db.Column(db.String(60), nullable=False)
     sets = db.Column(db.Text, nullable=False, default='[]')
     subjects = db.Column(db.Text, nullable=False, default='[]')
+    verdi = db.Column(db.Text, nullable=False, default='{}')
 
 class Setable(db.Model):
     __tablename__ = 'setable'  # Assuming you want the table name to be 'setable'
