@@ -95,3 +95,26 @@ def delete_user():
     Setable.query.filter_by(creator=current_user).delete()
     db.session.commit()
     return '', 204
+
+# admin
+@bp.route('/multicards/admin/sets/delete', methods=['DELETE'])
+@jwt_required()
+def delete_set_admin():
+    current_user = get_jwt_identity()
+    if current_user != "PhyoTP":
+        return jsonify({'msg': 'Forbidden'}), 403
+    ids = request.args.get('ids')
+    ids = ids.split(',')
+    invalid_ids = []
+    for id in ids:
+        existing_set = Setable.query.get(id)
+
+        if existing_set:
+            db.session.delete(existing_set)
+            db.session.commit()
+        else:
+            invalid_ids.append(id)
+    if invalid_ids:
+        return jsonify({'msg': 'Invalid IDs', 'invalid_ids': invalid_ids}), 400
+    else:
+        return '', 204

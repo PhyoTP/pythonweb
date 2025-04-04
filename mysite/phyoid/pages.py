@@ -174,6 +174,28 @@ def delete():
         else:
             raise
 
+@bp.route('/phyoid/user/<username>', methods=['GET'])
+def get_public_user_data(username):
+    user_data = UserDB.query.filter_by(username=username).first()
+
+    if not user_data:
+        return jsonify({'error': 'User not found'}), 404
+    filtered_sets = [s for s in user_data.sets if s.get('isPublic')]
+    user_sets = []
+    saved_sets = []
+    for s in filtered_sets:
+        if s.get('creator') == username:
+            user_sets.append(s)
+        else:
+            saved_sets.append(s)
+    user_info = {
+        "sets": {
+            "user": user_sets,
+            "saved": saved_sets
+        }
+    }
+    return jsonify(user_info), 200
+
 # admin
 
 @bp.route('/phyoid/admin/resetPassword', methods=['POST'])
