@@ -11,8 +11,8 @@ def home():
 
 @bp.route('/multicards/sets', methods=['GET'])
 def get_sets():
-    sets_table = Setable.query.with_entities(Setable.id, Setable.name, Setable.creator).all()
-    sets_list = [{"id": s.id, "name": s.name, "creator": s.creator} for s in sets_table]
+    sets_table = Setable.query.with_entities(Setable.id, Setable.name, Setable.creator, Setable.cardcount).all()
+    sets_list = [{"id": s.id, "name": s.name, "creator": s.creator, "isPublic": True, "cardCount": s.cardcount} for s in sets_table]
     return jsonify(sets_list), 200
 
 @bp.route('/multicards/set/<uuid>', methods=['GET'])
@@ -27,7 +27,8 @@ def get_set(uuid):
         "name": fetched_set.name,
         "creator": fetched_set.creator,
         "cards": fetched_set.cards,
-        "isPublic": fetched_set.ispublic
+        "isPublic": True,
+        "cardCount": fetched_set.cardcount
     }
 
     return jsonify(fetched_dict), 200
@@ -40,7 +41,7 @@ def add_set():
         name=new_set["name"],
         cards=json.dumps(new_set["cards"]),
         creator=new_set["creator"],
-        ispublic=new_set["isPublic"]
+        cardcount=len(new_set["cards"])
     )
     db.session.add(set_entry)
     db.session.commit()
@@ -58,6 +59,7 @@ def update_set(setID):
         if existing_set.creator == current_user:
             existing_set.name = updated_set['name']
             existing_set.cards = json.dumps(updated_set['cards'])
+            existing_set.cardcount = len(updated_set['cards'])
             db.session.commit()
             return jsonify({'msg': 'Updated Successfully'}), 200
         else:
@@ -118,3 +120,15 @@ def delete_set_admin():
         return jsonify({'msg': 'Invalid IDs', 'invalid_ids': invalid_ids}), 400
     else:
         return '', 204
+
+@bp.route('/multicards/admin/sets/recount', methods=['POST'])
+@jwt_required()
+def recount_sets():
+    current_user = get_jwt_identity()
+    if current_user != "PhyoTP":
+        return jsonify({'msg': 'Forbidden'}), 403
+    sets_table = Setable.query.all()
+    for s in sets_table:
+        s.cardcount = len(s.cards)
+    db.session.commit()
+    return '', 204

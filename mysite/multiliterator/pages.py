@@ -13,8 +13,8 @@ def convert_to_eng():
     
     if not text:
         return jsonify({"error": "Missing text parameter"}), 400
-
-    return jsonify({"output": convertToEng(text)}), 200
+    debug = data.get("debug", False)
+    return jsonify({"output": convertToEng(text, debug=debug)}), 200
 
 @bp.route('/multiliterator/burm/japanese', methods=['POST', 'GET'])
 def convert_to_jap():

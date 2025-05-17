@@ -2,8 +2,34 @@ from flask import Blueprint, request, jsonify
 import bcrypt
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 import json
-from models import db, UserDB
+from models import db, UserDB, Otps
 import requests
+from dotenv import load_dotenv
+import os
+load_dotenv()
+passw = os.getenv("PASSW")
+import smtplib
+import ssl
+from email.mime.text import MIMEText
+import random
+from datetime import datetime, timedelta
+
+def send_email(user_email, subject, text):
+    smtp_server = "hackclub.app"
+    port = 587
+    sender_email = "phyotp@hackclub.app"
+
+    message = MIMEText(text)
+    message["Subject"] = subject
+    message["From"] = sender_email
+    message["To"] = user_email
+
+    context = ssl.create_default_context()
+
+    with smtplib.SMTP(smtp_server, port) as server:
+        server.starttls(context=context)
+        server.login(sender_email, passw)
+        server.sendmail(sender_email, user_email, message.as_string())
 
 bp = Blueprint("phyoid", __name__)
 
@@ -66,6 +92,75 @@ def check_user():
             # Reraise if it's an unexpected error
             raise
 
+
+@bp.route('/phyoid/request_update/email', methods=['POST'])
+@jwt_required()
+def request_update_email():
+    current_user = get_jwt_identity()
+    new_email = request.json.get('email')
+    if not new_email:
+        return jsonify({'error': 'Invalid input'}), 400
+
+    user = UserDB.query.filter_by(username=current_user).first()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    # Check if user has requested an OTP in the last X minutes
+    recent_otp = Otps.query.filter_by(username=current_user, type="email").order_by(Otps.time.desc()).first()
+    if recent_otp and datetime.now(datetime.timezone.utc) - recent_otp.time < timedelta(minutes=1):
+        return jsonify({'error': 'Please wait before requesting another OTP'}), 429
+
+    gen_otp = str(random.randint(100000, 999999))
+    new_otp = Otps(hashcode=bcrypt.hashpw(gen_otp.encode('utf-8'), bcrypt.gensalt()).decode('utf-8'), username=current_user, type='email')
+    db.session.add(new_otp)
+    db.session.commit()
+    send_email(new_email, "PhyoID 2FA Code", f'''
+                        Hey there,
+                        Your OTP code is: {gen_otp}
+                        Please use this code to complete your email update.
+                        If you did not request this code, please ignore this email.
+                        PhyoID
+    ''')
+    return jsonify({"msg": "Email sent successfully"}), 200
+               
+
+@bp.route('/phyoid/update/email', methods=['PATCH'])
+@jwt_required()
+def update_email():
+    current_user = get_jwt_identity()
+    user = UserDB.query.filter_by(username=current_user).first()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    data = request.json
+    if not data or 'otp' not in data or 'new_email' not in data:
+        return jsonify({'error': 'Invalid input, OTP and new email are required'}), 400
+
+    otp = data.get('otp')
+    new_email = data.get('new_email')
+
+    # Check if the OTP is valid
+    otp_data = Otps.query.filter_by(username=current_user, type='email').order_by(Otps.time.desc()).first()
+    if not otp_data or not bcrypt.checkpw(otp.encode('utf-8'), otp_data.hashcode.encode('utf-8')):
+        return jsonify({'error': 'Invalid OTP'}), 401
+    if otp_data.time < datetime.now(datetime.timezone.utc) - timedelta(minutes=5):
+        db.session.delete(otp_data)
+        db.session.commit()
+        return jsonify({'error': 'OTP expired'}), 401
+    if user.email:
+        send_email(user.email, "PhyoID Email Change", f'''
+                        Hey there,
+                        Your email has been changed to {new_email}.
+                        If you did not request this change, please contact developer@phyotp.dev .
+                        PhyoID
+    ''')
+    # Update the user's email
+    user.email = new_email
+
+    # Delete the OTP after successful verification
+    db.session.delete(otp_data)
+    db.session.commit()
+
+    return jsonify({"msg": "Email updated successfully"}), 200
 
 @bp.route('/phyoid/update/<data>', methods=['PATCH'])
 @jwt_required()
@@ -192,9 +287,93 @@ def get_public_user_data(username):
         "sets": {
             "user": user_sets,
             "saved": saved_sets
-        }
+        },
+        "badges": user_data.badges
     }
     return jsonify(user_info), 200
+
+@bp.route('/phyoid/users', methods=['GET'])
+def get_all_users():
+    all_users = UserDB.query.all()
+    users_list = [i.username for i in all_users]
+    return jsonify(users_list), 200
+
+@bp.route('/phyoid/resetPassword/request', methods=['POST'])
+def request_reset_password():
+    data = request.json
+    if not data or 'username' not in data:
+        return jsonify({'error': 'Invalid input, username is required'}), 400
+    username = data.get('username')
+    user = UserDB.query.filter_by(username=username).first()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    if not user.email:
+        return jsonify({'error': 'Email not found'}), 404
+    email = user.email
+    # Check if user has requested an OTP in the last X minutes
+    recent_otp = Otps.query.filter_by(username=username, type="password").order_by(Otps.time.desc()).first()
+    if recent_otp and datetime.now(datetime.timezone.utc) - recent_otp.time < timedelta(minutes=1):
+        return jsonify({'error': 'Please wait before requesting another OTP'}), 429
+    gen_otp = str(random.randint(100000, 999999))
+    new_otp = Otps(hashcode=bcrypt.hashpw(gen_otp.encode('utf-8'), bcrypt.gensalt()).decode('utf-8'), username=username, type='password')
+    db.session.add(new_otp)
+    db.session.commit()
+    send_email(email, "PhyoID Password Reset Code", f'''
+                        Hey there,
+                        Your OTP code is: {gen_otp}
+                        Please use this code to reset your password.
+                        If you did not request this code, please ignore this email.
+                        PhyoID
+    ''')
+    return jsonify({"msg": "Email sent successfully"}), 200
+@bp.route('/phyoid/resetPassword/validate', methods=['POST'])
+def validate_reset_password():
+    data = request.json
+    if not data or 'otp' not in data or 'username' not in data:
+        return jsonify({'error': 'Invalid input, OTP and username are required'}), 400
+    otp = data.get('otp')
+    username = data.get('username')
+    user = UserDB.query.filter_by(username=username).first()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    # Check if the OTP is valid
+    otp_data = Otps.query.filter_by(username=username, type='password').order_by(Otps.time.desc()).first()
+    if not otp_data or not bcrypt.checkpw(otp.encode('utf-8'), otp_data.hashcode.encode('utf-8')):
+        return jsonify({'error': 'Invalid OTP'}), 401
+    # Check if the OTP is expired
+    if otp_data.time < datetime.now(datetime.timezone.utc) - timedelta(minutes=5):
+        return jsonify({'error': 'OTP expired'}), 401
+    
+    return jsonify({"msg": "OTP validated successfully"}), 200
+@bp.route('/phyoid/resetPassword', methods=['PATCH'])
+def reset_password():
+    data = request.json
+    if not data or 'otp' not in data or 'username' not in data or 'password' not in data:
+        return jsonify({'error': 'Invalid input, OTP, username and password are required'}), 400
+    otp = data.get('otp')
+    username = data.get('username')
+    password = data.get('password')
+    user = UserDB.query.filter_by(username=username).first()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    # Check if the OTP is valid
+    otp_data = Otps.query.filter_by(username=username, type='password').order_by(Otps.time.desc()).first()
+    if not otp_data or not bcrypt.checkpw(otp.encode('utf-8'), otp_data.hashcode.encode('utf-8')):
+        return jsonify({'error': 'Invalid OTP'}), 401
+    # Check if the OTP is expired
+    if otp_data.time < datetime.now(datetime.timezone.utc) - timedelta(minutes=5):
+        db.session.delete(otp_data)
+        db.session.commit()
+        return jsonify({'error': 'OTP expired'}), 401
+    try:
+        hashpass = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        user.hashpass = hashpass
+        db.session.delete(otp_data)
+        db.session.commit()
+        return jsonify({"msg": "Password reset successfully"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Database error', 'message': str(e)}), 500
 
 # admin
 
