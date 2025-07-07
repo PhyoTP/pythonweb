@@ -20,6 +20,7 @@ class UserDB(db.Model):
             name='email_format_check'
         ),
     )
+    estates = db.Column(db.ARRAY(db.String(64)), nullable=False, default=[])
 
 class Setable(db.Model):
     __tablename__ = 'setable'  # Assuming you want the table name to be 'setable'
