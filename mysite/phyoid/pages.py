@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 import bcrypt
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, create_refresh_token
 import json
 from models import db, UserDB, Otps
 import requests
@@ -13,6 +13,7 @@ import ssl
 from email.mime.text import MIMEText
 import random
 from datetime import datetime, timedelta
+import base64
 
 def send_email(user_email, subject, text):
     smtp_server = "hackclub.app"
@@ -60,7 +61,12 @@ def add_user():
         return jsonify({'error': 'Database error', 'message': str(e)}), 500
 
     access_token = create_access_token(identity=username)
-    return jsonify(access_token=access_token), 201
+    refresh_token = create_refresh_token(identity=username)
+
+    return jsonify(
+        access_token=access_token,
+        refresh_token=refresh_token
+    ), 201
 
 
 @bp.route('/phyoid/login', methods=['POST'])
@@ -80,14 +86,30 @@ def check_user():
         # Attempt to verify the password
         if bcrypt.checkpw(password.encode('utf-8'), user_data.hashpass.encode('utf-8')):
             access_token = create_access_token(identity=username)
-            return jsonify(access_token=access_token), 200
+            refresh_token = create_refresh_token(identity=username)
+
+            return jsonify(
+                access_token=access_token,
+                refresh_token=refresh_token
+            ), 200
         else:
             return jsonify({"msg": "Bad credentials"}), 401
     except ValueError as e:
         # Handle cases where salt is invalid, likely due to old format
         if "Invalid salt" in str(e):
             response = requests.post('https://phyotp.pythonanywhere.com/api/phyoid/login', json=user)
-            return response.json(), response.status_code
+            if response.status_code == 200:
+                user_data.hashpass = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                db.session.commit()
+                access_token = create_access_token(identity=username)
+                refresh_token = create_refresh_token(identity=username)
+
+                return jsonify(
+                    access_token=access_token,
+                    refresh_token=refresh_token
+                ), 200
+            else:
+                return response.json(), response.status_code
         else:
             # Reraise if it's an unexpected error
             raise
@@ -218,7 +240,7 @@ def get_user(data):
     
     # Check if user_data is already a list (decoded from JSON)
     if isinstance(user_data, str):
-        # If it’s a JSON string, decode it to a list
+        # If it's a JSON string, decode it to a list
         user_data = json.loads(user_data)
     
     return jsonify(user_data), 200
@@ -399,3 +421,4 @@ def admin_reset_password():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Database error', 'message': str(e)}), 500
+

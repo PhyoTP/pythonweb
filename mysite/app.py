@@ -5,6 +5,7 @@ from phyoid import pages as phyo
 from stickynotes import pages as sticky
 from multiliterator import pages as literator
 from virtualestates import pages as estates
+from timekeeper import pages as keeper
 from models import db
 from flask_cors import CORS
 app = Flask(__name__)
@@ -34,6 +35,7 @@ app.register_blueprint(phyo.bp)
 app.register_blueprint(sticky.bp)
 app.register_blueprint(literator.bp)
 app.register_blueprint(estates.bp)
+app.register_blueprint(keeper.bp)
 
 if __name__ == '__main__':
     with app.app_context():
