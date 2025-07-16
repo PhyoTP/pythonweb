@@ -1,0 +1,3 @@
+[submodule "mysite/timekeeper/timekeeper"]
+	path = mysite/timekeeper/timekeeper
+	url = https://github.com/PhyoTP/timekeeper.git
