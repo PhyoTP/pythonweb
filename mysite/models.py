@@ -1,5 +1,7 @@
 # models.py
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.dialects.postgresql import ARRAY
+
 
 db = SQLAlchemy()
 
@@ -30,7 +32,7 @@ class Setable(db.Model):
     cards = db.Column(db.Text, nullable=False, default='[]')
     creator = db.Column(db.String, nullable=False)
     cardcount = db.Column(db.Integer, nullable=False, default=0)
-
+    tags = db.Column(ARRAY(db.String(50)), nullable=False, default=[])
 class Otps(db.Model):
     __tablename__ = 'otps'  # Assuming you want the table name to be 'otps'
     __bind_key__ = 'phyoid'  # Connects this model to the phyoid database

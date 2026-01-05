@@ -11,8 +11,43 @@ def home():
 
 @bp.route('/multicards/sets', methods=['GET'])
 def get_sets():
-    sets_table = Setable.query.with_entities(Setable.id, Setable.name, Setable.creator, Setable.cardcount).all()
-    sets_list = [{"id": s.id, "name": s.name, "creator": s.creator, "isPublic": True, "cardCount": s.cardcount} for s in sets_table]
+    and_tags = request.args.get('and_tags')  # comma-separated list: e.g. ?and_tags=math,physics
+    or_tags = request.args.get('or_tags')    # comma-separated list: e.g. ?or_tags=chemistry,biology
+
+    query = Setable.query.with_entities(
+        Setable.id,
+        Setable.name,
+        Setable.creator,
+        Setable.cardcount,
+        Setable.tags
+    )
+
+    # --- Filtering logic ---
+    if and_tags:
+        and_tags_list = [t.strip() for t in and_tags.split(',') if t.strip()]
+        # Check that all of these tags are contained in the tags column
+        query = query.filter(Setable.tags.contains(and_tags_list))
+
+    if or_tags:
+        or_tags_list = [t.strip() for t in or_tags.split(',') if t.strip()]
+        # Check that at least one overlaps
+        query = query.filter(Setable.tags.overlap(or_tags_list))
+
+    # --- Execute query ---
+    sets_table = query.all()
+
+    # --- Format response ---
+    sets_list = [
+        {
+            "id": s.id,
+            "name": s.name,
+            "creator": s.creator,
+            "isPublic": True,
+            "cardCount": s.cardcount,
+            "tags": s.tags
+        } for s in sets_table
+    ]
+    
     return jsonify(sets_list), 200
 
 @bp.route('/multicards/set/<uuid>', methods=['GET'])
@@ -28,7 +63,8 @@ def get_set(uuid):
         "creator": fetched_set.creator,
         "cards": fetched_set.cards,
         "isPublic": True,
-        "cardCount": fetched_set.cardcount
+        "cardCount": fetched_set.cardcount,
+        "tags": fetched_set.tags
     }
 
     return jsonify(fetched_dict), 200
@@ -41,7 +77,8 @@ def add_set():
         name=new_set["name"],
         cards=json.dumps(new_set["cards"]),
         creator=new_set["creator"],
-        cardcount=len(new_set["cards"])
+        cardcount=len(new_set["cards"]),
+        tags=new_set.get("tags", [])
     )
     db.session.add(set_entry)
     db.session.commit()
@@ -60,6 +97,7 @@ def update_set(setID):
             existing_set.name = updated_set['name']
             existing_set.cards = json.dumps(updated_set['cards'])
             existing_set.cardcount = len(updated_set['cards'])
+            existing_set.tags = updated_set.get('tags', [])
             db.session.commit()
             return jsonify({'msg': 'Updated Successfully'}), 200
         else:
